@@ -18,6 +18,10 @@ npm run build
 npm run preview
 ```
 
+## GitHub Pages
+
+O workflow em `.github/workflows/pages.yml` publica automaticamente após cada push para `main`. No repositório, configure **Settings → Pages → Source: GitHub Actions**. Para o remoto `Gust4vo-Lima/almoso`, o endereço esperado é `https://gust4vo-lima.github.io/almoso/`.
+
 ## Planilha
 
 Carregue um arquivo `.xlsx`. A primeira linha deve conter os dias a partir da segunda coluna; a primeira coluna deve conter os horários de triagem separados por uma hora (por exemplo, `09:00`, `10:00`, `11:00`). Os nomes nas células precisam corresponder aos nomes cadastrados. A primeira aba da pasta de trabalho é utilizada.
