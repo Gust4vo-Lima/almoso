@@ -94,13 +94,11 @@ export function createSchedule(
 ): ScheduleResult {
   if (rows.length < 2) throw new Error('A planilha não contém linhas de horários.')
 
-  const header = rows[0] ?? []
-  const dayColumns: DayColumn[] = header
-    .slice(1)
-    .map((value, index) => ({ name: String(value).trim(), column: index + 1 }))
-    .filter((day) => day.name.length > 0)
+  const table = findActiveTable(rows)
+  const dayColumns = table.dayColumns
+  const tableRows = table.rows.slice(1)
   if (dayColumns.length === 0) {
-    throw new Error('Não encontrei os dias da semana no cabeçalho da primeira linha.')
+    throw new Error('Não encontrei os dias da semana no cabeçalho da tabela ativa.')
   }
 
   const windowStart = parseClock(window.start)
@@ -109,7 +107,7 @@ export function createSchedule(
     throw new Error('A janela de almoço configurada não é válida.')
   }
 
-  const timeRows = rows.slice(1).flatMap((row) => {
+  const timeRows = tableRows.flatMap((row) => {
     const time = parseClock(row[0])
     return time === null ? [] : [{ time, row }]
   })
@@ -208,4 +206,92 @@ export async function readScheduleFile(
   const rows = sheets[0]?.data as unknown[][] | undefined
   if (!rows) throw new Error('O arquivo Excel não contém planilhas.')
   return createSchedule(rows, file.name, analysts, window)
+}
+
+const WEEKDAY_NAMES = /^(segunda|terça|terça-feira|quarta|quarta-feira|quinta|quinta-feira|sexta|sexta-feira|sábado|sabado|domingo)/i
+const DATE_HEADER = /(\d{1,2})[/.:-](\d{1,2})(?:[/.:-](\d{2,4}))?/u
+
+function parseDateHeader(value: unknown, referenceYear: number): number | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+  }
+
+  if (typeof value === 'number' && value >= 1) {
+    const excelEpoch = Date.UTC(1899, 11, 30)
+    const milliseconds = excelEpoch + value * 24 * 66 * 60 * 1000
+    const date = new Date(milliseconds)
+    if (!Number.isNaN(date.getTime())) {
+      return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    }
+  }
+
+  const match = String(value).match(DATE_HEADER)
+  if (!match) return null
+  const day = Number(match[1])
+  const month = Number(match[2]) - 1
+  let year = match[3] ? Number(match[3]) : referenceYear
+  if (year < 100) year += 2000
+  const date = new Date(year, month, day)
+  return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day
+    ? date.getTime()
+    : null
+}
+
+function dayName(value: unknown): string | null {
+  const text = String(value).trim()
+  if (!text) return null
+  if (WEEKDAY_NAMES.test(text)) return text
+  const date = parseDateHeader(text, new Date().getFullYear())
+  return date === null ? null : text
+}
+
+function startOfWeek(date: Date): number {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const offset = (result.getDay() + 6) % 7
+  result.setDate(result.getDate() - offset)
+  return result.getTime()
+}
+
+function findActiveTable(rows: unknown[][]): { headerRow: number; firstColumn: number; dayColumns: DayColumn[]; rows: unknown[][] } {
+  const now = new Date()
+  const currentWeek = startOfWeek(now)
+  const candidates: Array<{ headerRow: number; firstColumn: number; dayColumns: DayColumn[]; tableDateScore: number }> = []
+
+  for (let headerRow = 0; headerRow < rows.length; headerRow += 1) {
+    const row = rows[headerRow] ?? []
+    for (let firstColumn = 1; firstColumn < row.length - 3; firstColumn += 1) {
+      let runLength = 0
+      for (let column = firstColumn; column < row.length && dayName(row[column]); column += 1) runLength += 1
+      if (runLength < 5) continue
+
+      const possibleRanges: Array<DayColumn[]> = []
+      for (let offset = 0; offset + 5 <= runLength; offset += 1) {
+        possibleRanges.push(Array.from({ length: 5 }, (_, index) => {
+          const column = firstColumn + offset + index
+          return { name: String(row[column]).trim(), column }
+        }))
+      }
+
+      for (const dayColumns of possibleRanges) {
+        const dates = dayColumns
+          .map(({ name }) => parseDateHeader(name, now.getFullYear()))
+          .filter((date): date is number => date !== null)
+        const tableDateScore = dates.length
+          ? Math.abs(startOfWeek(new Date(dates[0])) - currentWeek)
+          : Number.MAX_SAFE_INTEGER
+        candidates.push({ headerRow, firstColumn, dayColumns, tableDateScore })
+      }
+      break
+    }
+  }
+
+  if (candidates.length === 0) throw new Error('Não encontrei uma tabela semanal válida de dias da semana.')
+
+  const active = [...candidates].sort((left, right) => left.tableDateScore - right.tableDateScore || right.headerRow - left.headerRow)[0]
+  const nextHeaderIndex = rows.findIndex((_, index) => {
+    if (index <= active.headerRow) return false
+    return (rows[index] ?? []).slice(1).filter((value) => dayName(value)).length >= 5
+  })
+  const tableRows = rows.slice(active.headerRow, nextHeaderIndex === -1 ? rows.length : nextHeaderIndex)
+  return { ...active, rows: tableRows }
 }

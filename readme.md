@@ -31,3 +31,5 @@ Cada aparição de um analista bloqueia uma hora inteira de triagem. Os almoços
 ## Privacidade e configurações
 
 As preferências da equipe e da janela ficam em `localStorage`. Importar ou exportar configurações usa um arquivo JSON local. Os dados da planilha permanecem apenas em memória durante a sessão.
+
+O sistema identifica a tabela da semana atual pela sequência de datas dos cabeçalhos. Colunas anteriores escondidas à direita e tabelas posteriores na mesma planilha não participam da escala atual. “Escala Lia” e qualquer outro texto de controle são ignorados quando não correspondem aos analistas cadastrados.
