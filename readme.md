@@ -33,3 +33,5 @@ Cada aparição de um analista bloqueia uma hora inteira de triagem. Os almoços
 As preferências da equipe e da janela ficam em `localStorage`. Importar ou exportar configurações usa um arquivo JSON local. Os dados da planilha permanecem apenas em memória durante a sessão.
 
 O sistema identifica a tabela da semana atual pela sequência de datas dos cabeçalhos. Colunas anteriores escondidas à direita e tabelas posteriores na mesma planilha não participam da escala atual. “Escala Lia” e qualquer outro texto de controle são ignorados quando não correspondem aos analistas cadastrados.
+
+O arquivo real deve manter a coluna A vazia, os intervalos em B no formato `07:00 - 08:00`, e os dias da semana visíveis nas colunas seguintes. Somente a primeira aba é lida. Colunas anteriores escondidas e outras abas/tabelas não entram na escala.

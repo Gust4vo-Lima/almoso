@@ -43,7 +43,7 @@ function parseClock(value: unknown): number | null {
     return Math.round((value % 1) * 24 * 60)
   }
 
-  const match = String(value).trim().match(/^(\d{1,2})\s*[:h.]\s*(\d{2})$/i)
+  const match = String(value).trim().match(/^(\d{1,2})\s*[:h.]\s*(\d{2})(?:\s*-\s*\d{1,2}\s*[:h.]\s*\d{2})?$/i)
   if (!match) return null
 
   const hours = Number(match[1])
@@ -108,7 +108,7 @@ export function createSchedule(
   }
 
   const timeRows = tableRows.flatMap((row) => {
-    const time = parseClock(row[0])
+    const time = parseClock(row[table.firstColumn - 1])
     return time === null ? [] : [{ time, row }]
   })
   if (timeRows.length === 0) throw new Error('Não encontrei horários válidos na primeira coluna.')
@@ -218,7 +218,7 @@ function parseDateHeader(value: unknown, referenceYear: number): number | null {
 
   if (typeof value === 'number' && value >= 1) {
     const excelEpoch = Date.UTC(1899, 11, 30)
-    const milliseconds = excelEpoch + value * 24 * 66 * 60 * 1000
+    const milliseconds = excelEpoch + value * 24 * 60 * 60 * 1000
     const date = new Date(milliseconds)
     if (!Number.isNaN(date.getTime())) {
       return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
@@ -229,12 +229,8 @@ function parseDateHeader(value: unknown, referenceYear: number): number | null {
   if (!match) return null
   const day = Number(match[1])
   const month = Number(match[2]) - 1
-  let year = match[3] ? Number(match[3]) : referenceYear
-  if (year < 100) year += 2000
-  const date = new Date(year, month, day)
-  return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day
-    ? date.getTime()
-    : null
+  const date = new Date(referenceYear, month, day)
+  return date.getTime()
 }
 
 function dayName(value: unknown): string | null {
@@ -268,7 +264,7 @@ function findActiveTable(rows: unknown[][]): { headerRow: number; firstColumn: n
       for (let offset = 0; offset + 5 <= runLength; offset += 1) {
         possibleRanges.push(Array.from({ length: 5 }, (_, index) => {
           const column = firstColumn + offset + index
-          return { name: String(row[column]).trim(), column }
+          return { name: formatDateHeader(row[column], now.getFullYear()), column }
         }))
       }
 
@@ -294,4 +290,11 @@ function findActiveTable(rows: unknown[][]): { headerRow: number; firstColumn: n
   })
   const tableRows = rows.slice(active.headerRow, nextHeaderIndex === -1 ? rows.length : nextHeaderIndex)
   return { ...active, rows: tableRows }
+}
+
+function formatDateHeader(value: unknown, referenceYear: number): string {
+  const timestamp = parseDateHeader(value, referenceYear)
+  if (timestamp === null) return String(value).trim()
+  const date = new Date(timestamp)
+  return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`
 }
