@@ -1,12 +1,18 @@
-import { AlertTriangle, CalendarDays, Clock3 } from 'lucide-react'
-import type { Analyst, ScheduleResult } from './schedule'
+import { useState } from 'react'
+import { AlertTriangle, CalendarDays, Check, Clock3, Pencil, X } from 'lucide-react'
+import { adjustLunchAssignment, type Analyst, type LunchAssignment, type LunchWindow, type ScheduleResult } from './schedule'
 
 type ScheduleTableProps = {
   result: ScheduleResult | null
   analysts: Analyst[]
+  window: LunchWindow
+  onAdjust: (dayName: string, analystId: string, assignment: LunchAssignment) => void
 }
 
-export function ScheduleTable({ result, analysts }: ScheduleTableProps) {
+export function ScheduleTable({ result, analysts, window, onAdjust }: ScheduleTableProps) {
+  const [editing, setEditing] = useState<{ dayName: string; analystId: string } | null>(null)
+  const [draftStart, setDraftStart] = useState('')
+  const [editError, setEditError] = useState('')
   if (!result) {
     return (
       <section className="schedule-empty" aria-label="Resultado da escala">
@@ -19,6 +25,27 @@ export function ScheduleTable({ result, analysts }: ScheduleTableProps) {
   }
 
   const scheduledCount = result.days.reduce((total, day) => total + Object.values(day.assignments).filter(Boolean).length, 0)
+  function beginEdit(dayName: string, analyst: Analyst, assignment: LunchAssignment) {
+    setEditing({ dayName, analystId: analyst.id })
+    setDraftStart(assignment.start)
+    setEditError('')
+  }
+
+  function cancelEdit() {
+    setEditing(null)
+    setDraftStart('')
+    setEditError('')
+  }
+
+  function saveEdit(dayName: string, analyst: Analyst, assignment: LunchAssignment) {
+    try {
+      onAdjust(dayName, analyst.id, adjustLunchAssignment(assignment, analyst, window, draftStart))
+      cancelEdit()
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Não foi possível ajustar o horário.')
+    }
+  }
+
   const overlapCount = result.warnings.filter((warning) => warning.includes('sobreposição')).length
   const blockedCount = result.warnings.filter((warning) => warning.includes('bloco livre')).length
 
@@ -54,9 +81,34 @@ export function ScheduleTable({ result, analysts }: ScheduleTableProps) {
                   return (
                     <td key={day.name}>
                       {assignment ? (
-                        <span className={`lunch-chip${assignment.overlapMinutes > 0 ? ' has-overlap' : ''}`}>
-                          <Clock3 size={13} /><span>{assignment.start}<i>–</i>{assignment.end}</span>
-                        </span>
+                        editing?.dayName === day.name && editing.analystId === analyst.id ? (
+                          <div className="lunch-editor">
+                            <input
+                              aria-label={`Novo início do almoço de ${analyst.name} em ${day.name}`}
+                              type="time"
+                              step="900"
+                              value={draftStart}
+                              onChange={(event) => setDraftStart(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') saveEdit(day.name, analyst, assignment)
+                                if (event.key === 'Escape') cancelEdit()
+                              }}
+                            />
+                            <button type="button" className="lunch-edit-action confirm" aria-label="Confirmar horário" onClick={() => saveEdit(day.name, analyst, assignment)}><Check size={15} /></button>
+                            <button type="button" className="lunch-edit-action" aria-label="Cancelar ajuste" onClick={cancelEdit}><X size={15} /></button>
+                            {editError && <small className="lunch-edit-error">{editError}</small>}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className={`lunch-chip lunch-chip-editable${assignment.overlapMinutes > 0 ? ' has-overlap' : ''}${assignment.manuallyAdjusted ? ' is-manual' : ''}`}
+                            title="Clique para ajustar manualmente"
+                            onClick={() => beginEdit(day.name, analyst, assignment)}
+                          >
+                            <Clock3 size={13} /><span>{assignment.start}<i>–</i>{assignment.end}</span>
+                            {assignment.manuallyAdjusted ? <Pencil size={11} className="manual-pencil" /> : <Pencil size={11} />}
+                          </button>
+                        )
                       ) : (
                         <span className="unavailable-cell" title="Nenhum bloco livre encontrado">Indisponível</span>
                       )}

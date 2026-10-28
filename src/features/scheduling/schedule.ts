@@ -13,6 +13,7 @@ export type LunchAssignment = {
   start: string
   end: string
   overlapMinutes: number
+  manuallyAdjusted?: boolean
 }
 
 export type ScheduledDay = {
@@ -59,7 +60,25 @@ function formatClock(minutes: number): string {
 }
 
 function normalizeName(value: unknown): string {
-  return String(value).trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[•–—]/g, '/')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function splitAnalystCell(value: unknown): string[] {
+  const normalized = String(value)
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[|;\n,]+/g, ' ')
+    .replace(/\s*\/\s*/g, '|')
+  return normalized
+    .split('|')
+    .map(normalizeName)
+    .filter(Boolean)
 }
 
 function overlaps(startA: number, endA: number, startB: number, endB: number): number {
@@ -119,7 +138,7 @@ export function createSchedule(
     const occupiedByAnalyst = new Map<string, Set<number>>()
 
     for (const { time, row } of timeRows) {
-      const cellNames = String(row[column] ?? '').split(/[\n;,]+/).map(normalizeName)
+      const cellNames = splitAnalystCell(row[column])
       for (const cellName of cellNames) {
         const analyst = analystNames.get(cellName)
         if (!analyst) continue
@@ -196,6 +215,32 @@ export function createSchedule(
   return { sourceName, days, warnings }
 }
 
+export function adjustLunchAssignment(
+  assignment: LunchAssignment | null,
+  analyst: Analyst,
+  window: LunchWindow,
+  startValue: string,
+): LunchAssignment {
+  const start = parseClock(startValue)
+  const windowStart = parseClock(window.start)
+  const windowEnd = parseClock(window.end)
+  const duration = Math.ceil(analyst.lunchMinutes / SLOT_MINUTES) * SLOT_MINUTES
+
+  if (start === null || windowStart === null || windowEnd === null) {
+    throw new Error('Informe um horário válido.')
+  }
+  if (start % SLOT_MINUTES !== 0 || start < windowStart || start + duration > windowEnd) {
+    throw new Error(`O horário deve caber no intervalo de ${window.start} às ${window.end} em blocos de 15 minutos.`)
+  }
+
+  return {
+    start: formatClock(start),
+    end: formatClock(start + duration),
+    overlapMinutes: assignment?.overlapMinutes ?? 0,
+    manuallyAdjusted: true,
+  }
+}
+
 export async function readScheduleFile(
   file: File,
   analysts: Analyst[],
@@ -264,7 +309,11 @@ function findActiveTable(rows: unknown[][]): { headerRow: number; firstColumn: n
       for (let offset = 0; offset + 5 <= runLength; offset += 1) {
         possibleRanges.push(Array.from({ length: 5 }, (_, index) => {
           const column = firstColumn + offset + index
-          return { name: formatDateHeader(row[column], now.getFullYear()), column }
+          const match = String(row[column]).match(DATE_HEADER)
+          const name = match
+            ? `${String(Number(match[1])).padStart(2, '0')}.${String(Number(match[2])).padStart(2, '0')}.${now.getFullYear()}`
+            : String(row[column]).trim()
+          return { name, column }
         }))
       }
 
@@ -292,9 +341,3 @@ function findActiveTable(rows: unknown[][]): { headerRow: number; firstColumn: n
   return { ...active, rows: tableRows }
 }
 
-function formatDateHeader(value: unknown, referenceYear: number): string {
-  const timestamp = parseDateHeader(value, referenceYear)
-  if (timestamp === null) return String(value).trim()
-  const date = new Date(timestamp)
-  return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`
-}

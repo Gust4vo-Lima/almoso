@@ -293,6 +293,15 @@
 .lunch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 8px; color: #3d6848; border: 1px solid #e3ede0; border-radius: 4px; background: #f2f7ef; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .lunch-chip svg { color: #69906d; }
 .lunch-chip i { margin: 0 3px; color: #91a28e; font-size: 8px; font-style: normal; }
+.lunch-chip-editable { cursor: pointer; }
+.lunch-chip-editable:hover { border-color: #bdccb8; background: #edf4e9; }
+.lunch-chip.is-manual { box-shadow: inset 3px 0 #d39a55; }
+.manual-pencil { margin-left: 1px; }
+.lunch-editor { display: flex; min-width: 94px; flex-wrap: wrap; align-items: center; justify-content: center; gap: 3px; }
+.lunch-editor input { width: 86px; height: 28px; box-sizing: border-box; padding: 3px 5px; color: #445047; border: 1px solid #bdc9b9; border-radius: 4px; background: #fff; font: 700 9px ui-monospace, monospace; }
+.lunch-edit-action { width: 22px; height: 22px; display: inline-grid; place-items: center; padding: 0; border: 1px solid #e2e5df; border-radius: 4px; background: #fff; color: #6f786e; cursor: pointer; }
+.lunch-edit-action.confirm { color: #fff; border-color: #668d63; background: #668d63; }
+.lunch-edit-error { flex-basis: 100%; max-width: 120px; margin-top: 2px; color: #a15a4d; font-size: 8px; line-height: 1.2; }
 .lunch-chip.has-overlap { color: #995d32; border-color: #f0e2d3; background: #fcf5ec; }
 .lunch-chip.has-overlap svg { color: #b7804e; }
 .unavailable-cell { color: #a15a4d; font-size: 9px; }
